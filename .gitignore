@@ -1,4 +1,4 @@
-# Ignore local environment files and virtual environments
+
 venv/
 .env
 __pycache__/
