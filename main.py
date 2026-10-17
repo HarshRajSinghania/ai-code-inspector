@@ -33,40 +33,40 @@ def process_pull_request_event(repo_full_name: str, pr_number: int, diff_url: st
 from fastapi import FastAPI, Request, BackgroundTasks, Header, HTTPException
 
 @app.post("/webhook")
-
 async def handle_github_webhook(
     request: Request, 
     background_tasks: BackgroundTasks,
     x_hub_signature_256: str = Header(None)
 ):
-    
-    body = await request.body()
-    
-    
-    verify_github_signature(body, x_hub_signature_256)
-    
-    payload = await request.json()
-    
-    
-    if "pull_request" in payload and payload.get("action") in ["opened", "synchronize"]:
-        pr_number = payload["pull_request"]["number"]
-        repo_full_name = payload["repository"]["full_name"]
-        
-        
-        background_tasks.add_task(run_ai_code_review, repo_full_name, pr_number)
-
-    return {"status": "success", "message": "Webhook received and processing in background"}
-
-
-def run_ai_code_review(repo_name: str, pr_number: int):
     try:
+        body = await request.body()
         
-        diff_data = fetch_pr_diff(repo_name, pr_number)
-        review_comment = inspect_code_diff(diff_data)
-        post_github_comment(repo_name, pr_number, review_comment)
-        print(f"Successfully reviewed PR #{pr_number} for {repo_name}")
+        
+        if x_hub_signature_256:
+            verify_github_signature(body, x_hub_signature_256)
+            
+        payload = await request.json()
+        
+        
+        event_type = request.headers.get("X-GitHub-Event", "unknown")
+        if event_type == "ping":
+            return {"status": "success", "message": "Pong! Webhook is active."}
+        
+        
+        if event_type == "pull_request" and payload.get("action") in ["opened", "synchronize"]:
+            pr_number = payload["pull_request"]["number"]
+            repo_full_name = payload["repository"]["full_name"]
+            
+            
+            background_tasks.add_task(run_ai_code_review, repo_full_name, pr_number)
+
+        return {"status": "success", "message": f"Event {event_type} received successfully"}
+
     except Exception as e:
-        print(f"Error in background review: {e}")
+        print(f"Webhook Error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 
 
 @app.get("/health")
